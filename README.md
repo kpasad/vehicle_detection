@@ -73,7 +73,7 @@ Figure below shows the processing pipeline for the test images. The first row sh
 
 
 In any given frame, multiple windows will generate a positive  classification for the same vehicle. The window joining algorithm looks for overlapping windows, where the overlap is defined as the union of two windows. If the overlap greater than a threshold, the windows are joined. Joining entails using the maximum coordinates along each axis in both direction, where maximum is from the center of image.
-The number of windows joined is greater than a programmable threshold, the windows in the set constitute a car. This mechanism also provides guard against false alarms.
+The number of windows joined is greater than a programmable threshold, the windows in the set constitute a car. This mechanism also provides guard against false alarms. The windows are joined over multiple frames to create a more robust solution.
 
 ### Video Implementation
 
