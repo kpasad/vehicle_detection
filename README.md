@@ -66,12 +66,14 @@ See the images
 ![alt text][image3]
 
 ##Pipeline
+
 Figure below shows the processing pipeline for the test images. The first row show overlap of multiple windows. The middle row is the heat map. The final row shows the result of window combining. Image #2 has a false alarm that is removed eventually. The third image has a missed detection. 
 ![alt text][image4]
 ---
 
 
-Multiple windows will generate a positive  classification for the same vehicle. We simply 'join' the windows that have a positive classification. Joining entails using the maximum coordinates along each axis in both direction, where maximum is from the center of image.
+In any given frame, multiple windows will generate a positive  classification for the same vehicle. The window joining algorithm looks for overlapping windows, where the overlap is defined as the union of two windows. If the overlap greater than a threshold, the windows are joined. Joining entails using the maximum coordinates along each axis in both direction, where maximum is from the center of image.
+The number of windows joined is greater than a programmable threshold, the windows in the set constitute a car. This mechanism also provides guard against false alarms.
 
 ### Video Implementation
 
