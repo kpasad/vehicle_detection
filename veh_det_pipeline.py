@@ -135,58 +135,30 @@ params['cspace']='RGB'
 params['features']=['spatial','histo','hog']
 params['hog_channel']='ALL'
 params['y_start_stop']=[None,None]
-sw_x_limits = [
-    [None, None],
-    [32, None],
-    [412, 1280]
-]
+params['slide_win_overlap']=0.5
+params['slide_winsize']= [  (144, 144),(108, 108),(96, 96)]
 
-sw_y_limits = [
-    [400, 640],
-    [400, 600],
-    [390, 540]
-]
-
-sw_window_size = [
-    (128, 128),
-    (96, 96),
-    (80, 80)
-]
-
-sw_overlap = [
-    (0.5, 0.5),
-    (0.5, 0.5),
-    (0.5, 0.5)
-]
-
-def get_hot_boxes (image,params):
-    """Applies sliding windows to images
-    and finds hot windows. Also returns image with all hot boxes are drawn
-    Args:
-        image (numpy.array): image
-    Returns:
-        hot_windows(list), image_with_hot_windows_drawn(numpy.array)
-    """
+def find_cars (image,params):
 
     dst = np.copy (image)
-    all_hot_windows = []
+    all_valid_windows = []
 
     # iterate over previousely defined sliding windows
-    for x_limits, y_limits, window_size, overlap in zip (sw_x_limits, sw_y_limits, sw_window_size, sw_overlap):
+    for win_size in params['slide_winsize']:
 
         windows = slide_window(
             dst,
-            x_start_stop=x_limits,
-            y_start_stop=y_limits,
-            xy_window=window_size,
-            xy_overlap=overlap
+            x_bounds_stop=(700,None),
+            y_start_stop=(400,650),
+            xy_window=win_size,
+            xy_overlap=params['slide_win_overlap']
         )
 
-        hot_windows = search_windows(image, windows, svc, X_scaler, params)
+        valid_windows = search_windows(image, windows, svc, X_scaler, params)
 
-        all_hot_windows.extend (hot_windows)
+        all_valid_windows.extend (valid_windows)
 
-        dst = draw_boxes(dst, hot_windows, color=(0, 0, 1), thick=4)
+        dst = draw_boxes(dst, valid_windows, color=(0, 0, 1), thick=4)
 
     return all_hot_windows, dst
 
@@ -211,24 +183,16 @@ def get_heat_map(image, bbox_list):
     return heatmap
 
 
-class AverageHotBox():
+class combine_windows():
     #Class for window combining
 
     def __init__(self, box):
         self.avg_box = [list(p) for p in box]
         self.detected_count = 1
         self.boxes = [box]
+        self.overlap_thresh=0.3 #TBD: Parameterise
 
-    def get_strength(self):
-        """Returns number of joined boxes"""
-        return self.detected_count
-
-    def get_box(self):
-        """Uses joined boxes information to compute
-        this average box representation as hot box.
-        This box has average center of all boxes and have
-        size of 2 standard deviation by x and y coordinates of its points
-        """
+     def box_bounds(self):
         if len(self.boxes) > 1:
             center = np.average(np.average(self.boxes, axis=1), axis=0).astype(np.int32).tolist()
 
@@ -250,7 +214,7 @@ class AverageHotBox():
         else:
             return self.boxes[0]
 
-    def is_close(self, box):
+    def check_overlap(self, box,overlap_thresh):
         """Check wether specified box is close enough for joining
         to be close need to overlap by 30% of area of this box or the average box
         """
@@ -274,53 +238,51 @@ class AverageHotBox():
         intersection = x_overlap * y_overlap;
 
         if (
-                        intersection >= 0.3 * area1 or
-                        intersection >= 0.3 * area2
+                        intersection >= overlap_thresh * area1 or
+                        intersection >= overlap_thresh * area2
         ):
             return True
         else:
             return False
 
-    def join(self, boxes):
-        """Join in all boxes from list of given boxes,
-        removes joined boxes from input list of boxes
-        """
 
+    def combine(self, cand_wins):
         joined = False
 
-        for b in boxes:
-            if self.is_close(b):
-                boxes.remove(b)
-                self.boxes.append(b)
+        for win in cand_wins:
+            if self.check_overlap(win,self.overlap_thresh):
+                cand_wins.remove(win)
+                self.cand_wins.append(win)
                 self.detected_count += 1
 
-                self.avg_box[0][0] = min(self.avg_box[0][0], b[0][0])
-                self.avg_box[0][1] = min(self.avg_box[0][1], b[0][1])
-                self.avg_box[1][0] = max(self.avg_box[1][0], b[1][0])
-                self.avg_box[1][1] = max(self.avg_box[1][1], b[1][1])
+                self.avg_box[0][0] = min(self.avg_box[0][0], win[0][0])
+                self.avg_box[0][1] = min(self.avg_box[0][1], win[0][1])
+                self.avg_box[1][0] = max(self.avg_box[1][0], win[1][0])
+                self.avg_box[1][1] = max(self.avg_box[1][1], win[1][1])
 
                 joined = True
 
         return joined
 
 
-def calc_average_boxes(hot_boxes, strength):
+def calc_average_boxes(cand_wins, detect_cnt_thrs):
     """Compute average boxes from specified hot boxes and returns
     average boxes with equals or higher strength
     """
-    avg_boxes = []
-    while len(hot_boxes) > 0:
-        b = hot_boxes.pop(0)
-        hb = AverageHotBox(b)
-        while hb.join(hot_boxes):
+    #avg_boxes = []
+    cand_comb_win = []
+    while len(cand_wins) > 0:
+        win = cand_wins.pop(0)
+        hb = combine_windows(win)
+        while hb.combine(hot_boxes):
             pass
-        avg_boxes.append(hb) #hb contains all windows that are joined
+            cand_comb_win.append(hb) #hb contains all windows that are joined
 
-    boxes = []
-    for ab in avg_boxes:
-        if ab.get_strength() >= strength:
-            boxes.append(ab.get_box())
-    return boxes
+    comb_wins = []
+    for cand in cand_comb_win:
+        if cand.detected_count >= detect_cnt_thrs:
+            comb_wins.append(cand.box_bounds())
+    return comb_wins
 
 
 X_scaler,svc =pk.load(open(basepath+'/classifier.pk','rb'))
@@ -338,7 +300,7 @@ for impath in glob.glob(basepath+'/test_images/test*.jpg'):
     image = image_orig.astype(np.float32) / 255
 
     # hot boxes
-    hot_boxes, image_with_hot_boxes = get_hot_boxes(image,params)
+    hot_boxes, image_with_hot_boxes = find_cars(image,params)
     # heat map
     heat_map = get_heat_map(image, hot_boxes)
 
@@ -346,50 +308,29 @@ for impath in glob.glob(basepath+'/test_images/test*.jpg'):
     avg_boxes = calc_average_boxes(hot_boxes, 2)
     image_with_boxes = draw_boxes(image, avg_boxes, color=(0, 0, 1), thick=4)
 
-    test_images.append(image_with_hot_boxes)
-    test_images.append(heat_map)
-    test_images.append(image_with_boxes)
-
-    test_images_titles.extend(['', '', ''])
-
-test_images_titles[0] = 'hot boxes'
-test_images_titles[1] = 'heat map'
-test_images_titles[2] = 'average boxes'
-
-#img_grid(test_images,(6,3))
 
 
-# in video I use information from multiple frames to
-# make average boxes more robust and filter false positives
-# I accumulate all hot boxes from last several frames and use them
-# for calculating average boxes
-
-class LastHotBoxesQueue():
-    """Class for accumulation of hot boxes from last 10 frames
-    """
+class DetectionQueue(max_hist):
 
     def __init__(self):
-        self.queue_max_len = 10  # number items to store
-        self.last_boxes = []
+        self.queue_max_len = max_hist  # number items to store
+        self.last_wins = []
 
-    def put_hot_boxes(self, boxes):
-        """Put frame hot boxes
-        """
+    def queue_win(self, boxes):
+
         if (len(self.last_boxes) > self.queue_max_len):
-            tmp = self.last_boxes.pop(0)
+            tmp = self.last_wins.pop(0)
 
-        self.last_boxes.append(boxes)
+        self.last_wins.append(boxes)
 
-    def get_hot_boxes(self):
-        """Get last 10 frames hot boxes
-        """
+    def get_queue(self):
         b = []
         for boxes in self.last_boxes:
             b.extend(boxes)
         return b
 
 
-last_hot_boxes = LastHotBoxesQueue()
+detQueue = DetectionQueue(10)
 
 
 def process_image(image_orig):
@@ -397,9 +338,9 @@ def process_image(image_orig):
     image = image_orig.astype(np.float32) / 255
 
     # accumulating hot boxes over 10 last frames
-    hot_boxes, image_with_hot_boxes = get_hot_boxes(image,params)
-    last_hot_boxes.put_hot_boxes(hot_boxes)
-    hot_boxes = last_hot_boxes.get_hot_boxes()
+    hot_boxes, image_with_hot_boxes = find_cars(image,params)
+    detQueue.queue_win(hot_boxes)
+    hot_boxes = detQueue.get_queue()
 
     # calculating average boxes and use strong ones
     # need to tune strength on particular classifer
