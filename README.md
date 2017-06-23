@@ -1,4 +1,9 @@
 # Project organisation
+
+wrtite.md : Explains the project.
+
+## Scripts
+
 1 . classifier.py: Runs the classifier (default is SVM) on the data set with 80-20 split. Generates a CV accuracy scaore. Generates model is stored in pickle file, classifier.pk
 
 2.  classifier.pk: Trained model generated using the defualt classifier.py
