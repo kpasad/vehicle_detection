@@ -215,12 +215,6 @@ class combine_windows():
             return self.boxes[0]
 
     def check_overlap(self, box,overlap_thresh):
-        """Check wether specified box is close enough for joining
-        to be close need to overlap by 30% of area of this box or the average box
-        """
-
-        # Thank you, davin
-        # http://math.stackexchange.com/questions/99565/simplest-way-to-calculate-the-intersect-area-of-two-rectangles
         x11 = self.avg_box[0][0]
         y11 = self.avg_box[0][1]
         x12 = self.avg_box[1][0]
