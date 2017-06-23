@@ -1,15 +1,6 @@
 
 # Vehicle Detection Project
 
-The goals / steps of this project are the following:
-
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
-* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
-
 [//]: # (Image References)
 [image1]: ./images/cars_nocars.png
 [image2a]: ./images/cars_hog.png
@@ -37,7 +28,7 @@ The base classifier uses the combination of following features:
 *  Spatial binning 
 *  Histogram of Gradients
 
-All three feature extraction schemes are a part of the library file, veh_lib_det.py and are contained in their name sake functions.
+All three feature extraction schemes are a part of the library file, veh_lib_det.py and are contained in their name-sake functions.
 
 ### Training data set:
 The training data set are made available by Udacity [here ](https://github.com/udacity/CarND-Vehicle-Detection). The dataset consists of a series of tightly cropped images, 64 by 64 pixels each. The data set is balanced and contains about 8700 images for each category. Below are several example images
@@ -64,10 +55,8 @@ See the images
 ![alt text][image3]
 
 ### Pipeline
-
 Figure below shows the processing pipeline for the test images. The first row show overlap of multiple windows. The middle row is the heat map. The final row shows the result of window combining. Image #2 has a false alarm that is removed eventually. The third image has a missed detection. 
 ![alt text][image4]
----
 
 
 In any given frame, multiple windows will generate a positive  classification for the same vehicle. The window joining algorithm looks for overlapping windows, where the overlap is defined as the union of two windows. If the overlap greater than a threshold, the windows are joined. Joining entails using the maximum coordinates along each axis in both direction, where maximum is from the center of image.
