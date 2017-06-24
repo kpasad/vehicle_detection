@@ -49,22 +49,27 @@ In case of no cars, the HOG is not very discriminative. See below
 The first classifier was a linear SVM. The cross validation error with linear SVM was ~97%. Despite the low classification error rate, a false alarm was visible in the test images. When tried on the video sequence, the false alarms and missed detections were readily apparent. There were two options on reducing the false alarm rate. Improving the sliding window processing pipeline or improving the classification itself. I chose the later option as it was a quick test. The SVM kernel was switched to a non-linear RBF kernel. The classification error improved to ~99%. The seemingly marginal difference had a significant influence on the false alarm and quality of video.  
 
 ### Sliding Window Search
-Three window sizes were used corresponding to near field, mid field and far field with respect to the camera. The window search was limited to a trapezoid in front of the camera. The window span for each of the three sizes are 128,96, and 80. They were chosen over several iterations and visual inspection. The overlap between the windows was 50%. The function slide_window() in veh_det_lib.py generates the coordinates of all windows of a given size and given overlap. It is called thrice for three window sizes
+Three window sizes were used corresponding to near field, mid field and far field with respect to the camera. The window search was limited to a trapezoid in front of the camera. The intial window size selected was 144, 128, 96. When applying the pipleline to through the video, it was observed that whent he car was a certain distance from the camera, it was nto being deteted. This led to experimenting with a few diffrent windows. I finally chose three sizes as 128,96, and 80. They were chosen over several iterations and visual inspection. The overlap between the windows was 50%. The function slide_window() in veh_det_lib.py generates the coordinates of all windows of a given size and given overlap. It is called thrice for three window sizes
 See the images
 
 ![alt text][image3]
 
 ### Pipeline
-Figure below shows the processing pipeline for the test images. The first row show overlap of multiple windows. The middle row is the heat map. The final row shows the result of window combining. Image #2 has a false alarm that is removed eventually. The third image has a missed detection. 
+Figure below shows the processing pipeline for the test images. The first row show overlap of multiple windows. The middle row is the heat map. The final row shows the result of window combining. 
 ![alt text][image4]
 
+In any given frame, multiple windows will generate a positive  classification for the same vehicle. And there will be false detections. There are two part of this stage pipline of the pipeline, minimising false alarm and combining overlapping windows:
+1. Removing false alarms
+To remove false alarm, we use the thresholded heat-maps. The heatmap is the count of the number of windows(detected as a car) that a given pixels falls in. A pixel corresponding to true detection will have a larger count on heatmap and false alrm will have a smaller count. I found that for a video application, a relatively large threshold is needed. I found that a threshold value corresponding to 80% true detection  (e.g. a pixel with a heat-value of 2 or less over 10 windows) is needed to suppress the false alarm. 
+2. Combine the overlapping windows into box one per vehicle:
+Following thresholding of the heatmap, I used the label() function from scipy.ndimage.measurements() to identify and box the detected cars.
 
-In any given frame, multiple windows will generate a positive  classification for the same vehicle. The window joining algorithm looks for overlapping windows, where the overlap is defined as the union of two windows. If the overlap greater than a threshold, the windows are joined. Joining entails using the maximum coordinates along each axis in both direction, where maximum is from the center of image.
-The number of windows joined is greater than a programmable threshold, the windows in the set constitute a car. This mechanism also provides guard against false alarms. The windows are joined over multiple frames to create a more robust solution.
+
 
 ### Video Implementation
 
 Here's a [link to my video result](https://www.dropbox.com/s/sr8xb2q5gdrwlqr/project_video_result.mp4?dl=0)
+Finding parameters after processing the entire clip is inefficient. So I used sections of the clip where there were noticible false alarms or missed detection and refined the parameters for these clips. I use a queue data structure to hold the boxes over last 'max_hist' number of frames. I used max_hist of 20 frames, corresponding to ~0.8 sec worth of video (at 25fps)
 
 ### Discussion
 
