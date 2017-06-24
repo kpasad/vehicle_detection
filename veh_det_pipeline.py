@@ -131,12 +131,12 @@ params['collapse_feat']=True
 params['spatial_bin_size']=(16,16)
 params['color_hist_nbins']=16
 params['color_hist_bins_range']=(0,256)
-params['cspace']='RGB'
+params['cspace']='HLS'
 params['features']=['spatial','histo','hog']
 params['hog_channel']='ALL'
 params['y_start_stop']=[None,None]
-params['slide_win_overlap']=0.5
-params['slide_winsize']= [  (144, 144),(108, 108),(96, 96)]
+params['slide_win_overlap']=(0.5,0.5)
+params['slide_winsize']= [  (128, 128),(96, 96),(80, 80)]
 
 def find_cars (image,params):
 
@@ -148,8 +148,8 @@ def find_cars (image,params):
 
         windows = slide_window(
             dst,
-            x_bounds_stop=(700,None),
-            y_start_stop=(400,650),
+            x_start_stop=[700,None],
+            y_start_stop=[400,650],
             xy_window=win_size,
             xy_overlap=params['slide_win_overlap']
         )
@@ -160,200 +160,98 @@ def find_cars (image,params):
 
         dst = draw_boxes(dst, valid_windows, color=(0, 0, 1), thick=4)
 
-    return all_hot_windows, dst
+    return all_valid_windows, dst
 
-def get_heat_map(image, bbox_list):
-    """Computes heat map of hot windows. Puts all specified
-    hot windows on top of each other, so every pixel of returned image will
-    contain how many hot windows covers this pixel
-    Args:
-        image (numpy.array): image
-    Returns:
-        heatmap (numpy.array) grayscale image of the same size as input image
-    """
-
-    heatmap = np.zeros_like(image[:,:,0]).astype(np.float)
-
+def add_heat(heatmap, bbox_list):
     # Iterate through list of bboxes
     for box in bbox_list:
         # Add += 1 for all pixels inside each bbox
+        # Assuming each "box" takes the form ((x1, y1), (x2, y2))
         heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
 
     # Return updated heatmap
+    return heatmap# Iterate through list of bboxes
+
+def apply_threshold(heatmap, threshold):
+    # Zero out pixels below the threshold
+    heatmap[heatmap <= threshold] = 0
+    # Return thresholded map
     return heatmap
 
-
-class combine_windows():
-    #Class for window combining
-
-    def __init__(self, box):
-        self.avg_box = [list(p) for p in box]
-        self.detected_count = 1
-        self.boxes = [box]
-        self.overlap_thresh=0.3 #TBD: Parameterise
-
-     def box_bounds(self):
-        if len(self.boxes) > 1:
-            center = np.average(np.average(self.boxes, axis=1), axis=0).astype(np.int32).tolist()
-
-            # getting all x and y coordinates of
-            # all corners of joined boxes separately
-            xs = np.array(self.boxes)[:, :, 0]
-            ys = np.array(self.boxes)[:, :, 1]
-
-            half_width = int(np.std(xs))
-            half_height = int(np.std(ys))
-            return (
-                (
-                    center[0] - half_width,
-                    center[1] - half_height
-                ), (
-                    center[0] + half_width,
-                    center[1] + half_height
-                ))
-        else:
-            return self.boxes[0]
-
-    def check_overlap(self, box,overlap_thresh):
-        x11 = self.avg_box[0][0]
-        y11 = self.avg_box[0][1]
-        x12 = self.avg_box[1][0]
-        y12 = self.avg_box[1][1]
-        x21 = box[0][0]
-        y21 = box[0][1]
-        x22 = box[1][0]
-        y22 = box[1][1]
-
-        x_overlap = max(0, min(x12, x22) - max(x11, x21))
-        y_overlap = max(0, min(y12, y22) - max(y11, y21))
-
-        area1 = (x12 - x11) * (y12 - y11)
-        area2 = (x22 - x21) * (y22 - y21)
-        intersection = x_overlap * y_overlap;
-
-        if (
-                        intersection >= overlap_thresh * area1 or
-                        intersection >= overlap_thresh * area2
-        ):
-            return True
-        else:
-            return False
-
-
-    def combine(self, cand_wins):
-        joined = False
-
-        for win in cand_wins:
-            if self.check_overlap(win,self.overlap_thresh):
-                cand_wins.remove(win)
-                self.cand_wins.append(win)
-                self.detected_count += 1
-
-                self.avg_box[0][0] = min(self.avg_box[0][0], win[0][0])
-                self.avg_box[0][1] = min(self.avg_box[0][1], win[0][1])
-                self.avg_box[1][0] = max(self.avg_box[1][0], win[1][0])
-                self.avg_box[1][1] = max(self.avg_box[1][1], win[1][1])
-
-                joined = True
-
-        return joined
-
-
-def calc_average_boxes(cand_wins, detect_cnt_thrs):
-    """Compute average boxes from specified hot boxes and returns
-    average boxes with equals or higher strength
-    """
-    #avg_boxes = []
-    cand_comb_win = []
-    while len(cand_wins) > 0:
-        win = cand_wins.pop(0)
-        hb = combine_windows(win)
-        while hb.combine(hot_boxes):
-            pass
-            cand_comb_win.append(hb) #hb contains all windows that are joined
-
-    comb_wins = []
-    for cand in cand_comb_win:
-        if cand.detected_count >= detect_cnt_thrs:
-            comb_wins.append(cand.box_bounds())
-    return comb_wins
-
+def draw_labeled_bboxes(img, labels):
+    # Iterate through all detected cars
+    for car_number in range(1, labels[1]+1):
+        # Find pixels with each car_number label value
+        nonzero = (labels[0] == car_number).nonzero()
+        # Identify x and y values of those pixels
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Define a bounding box based on min/max x and y
+        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+        # Draw the box on the image
+        cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
+    # Return the image
+    return img
 
 X_scaler,svc =pk.load(open(basepath+'/classifier.pk','rb'))
 
 test_images = []
 test_images_titles = []
 
-for impath in glob.glob(basepath+'/test_images/test*.jpg'):
-    print('image {}'.format(impath))
-    image_orig = mpimg.imread(impath)
-
-    # Uncomment the following line if you extracted training
-    # data from .png images (scaled 0 to 1 by mpimg) and the
-    # image you are searching is a .jpg (scaled 0 to 255)
-    image = image_orig.astype(np.float32) / 255
-
-    # hot boxes
-    hot_boxes, image_with_hot_boxes = find_cars(image,params)
-    # heat map
-    heat_map = get_heat_map(image, hot_boxes)
-
-    # average boxes
-    avg_boxes = calc_average_boxes(hot_boxes, 2)
-    image_with_boxes = draw_boxes(image, avg_boxes, color=(0, 0, 1), thick=4)
-
-
-
-class DetectionQueue(max_hist):
-
-    def __init__(self):
+class DetectionQueue():
+    def __init__(self,max_hist):
         self.queue_max_len = max_hist  # number items to store
         self.last_wins = []
 
     def queue_win(self, boxes):
 
-        if (len(self.last_boxes) > self.queue_max_len):
+        if (len(self.last_wins) > self.queue_max_len):
             tmp = self.last_wins.pop(0)
 
         self.last_wins.append(boxes)
 
     def get_queue(self):
         b = []
-        for boxes in self.last_boxes:
+        for boxes in self.last_wins:
             b.extend(boxes)
         return b
 
 
-detQueue = DetectionQueue(10)
+detQueue = DetectionQueue(20)
 
+
+
+from scipy.ndimage.measurements import label
 
 def process_image(image_orig):
     image_orig = np.copy(image_orig)
     image = image_orig.astype(np.float32) / 255
-
-    # accumulating hot boxes over 10 last frames
-    hot_boxes, image_with_hot_boxes = find_cars(image,params)
+    # find cars in this frame.
+    hot_boxes, image_with_hot_boxes = find_cars(image, params)
+    #Add the detection to the Queue
     detQueue.queue_win(hot_boxes)
-    hot_boxes = detQueue.get_queue()
+    q_hot_boxes = detQueue.get_queue()
 
-    # calculating average boxes and use strong ones
-    # need to tune strength on particular classifer
-    avg_boxes = calc_average_boxes(hot_boxes, 20)
-    image_with_boxes = draw_boxes(image, avg_boxes, color=(0, 0, 1), thick=4)
+    heat = np.zeros_like(image[:, :, 0]).astype(np.float)
+    heatmap = add_heat(heat, q_hot_boxes)
+    thrs_heatmap = apply_threshold(heatmap,18)
 
-    return image_with_boxes * 255
+    # Find final boxes from heatmap using label function
+    labels = label(thrs_heatmap)
+    draw_img = draw_labeled_bboxes(np.copy(image_orig), labels)
+    #plt.imshow(draw_img)
+    return draw_img
 
 
 from moviepy.editor import VideoFileClip
 
 
 def process_video(input_path, output_path):
+    #clip = VideoFileClip(input_path).subclip(23,28)
     clip = VideoFileClip(input_path)
-
     result = clip.fl_image(process_image)
     result.write_videofile(output_path)
 
 
 # select video to operate on
-# process_video ('test_video.mp4', 'test_video_result.mp4')
-process_video('project_video.mp4', 'project_video_result.mp4')
+process_video('project_video.mp4', 'project_video_result_v2.mp4')
