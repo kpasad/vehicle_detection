@@ -111,7 +111,7 @@ params['collapse_feat']=True
 params['spatial_bin_size']=(16,16)
 params['color_hist_nbins']=16
 params['color_hist_bins_range']=(0,256)
-params['cspace']='RGB'
+params['cspace']='HLS'
 params['features']=['spatial','histo','hog']
 params['hog_channel']='ALL'
 
