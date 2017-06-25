@@ -68,7 +68,7 @@ Following thresholding of the heatmap, I used the label() function from scipy.nd
 
 ### Video Implementation
 
-Here's a [link to my video result](https://www.dropbox.com/s/sr8xb2q5gdrwlqr/project_video_result.mp4?dl=0)
+Here's a [link to my video result]https://www.dropbox.com/s/tzodka0co42aiv5/project_video_result.mp4?dl=0)
 Finding parameters after processing the entire clip is inefficient. So I used sections of the clip where there were noticible false alarms or missed detection and refined the parameters for these clips. I use a queue data structure to hold the boxes over last 'max_hist' number of frames. I used max_hist of 20 frames, corresponding to ~0.8 sec worth of video (at 25fps)
 
 ### Discussion
